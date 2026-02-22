@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>Generador del Mejor Horario</h1>
+    <p>Haz clic en el botón para ejecutar el algoritmo en Python.</p>
+
+    <div class="zona-trabajo">
+        <form action="{{ url_for('horarios.calcular') }}" method="GET" target="_blank">
+            <button type="submit" style="font-size: 18px; padding: 15px;">Ejecutar Algoritmo de Prueba</button>
+        </form>
+    </div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <h1>Subida de Archivos Horarios</h1>
+    <p>Por favor, sube los archivos PDF o JSON con los horarios globales de los profesores.</p>
+
+    <form action="#" method="POST" enctype="multipart/form-data" class="formulario-subida">
+        <label for="archivo">Selecciona un archivo:</label>
+        <input type="file" id="archivo" name="archivo" accept=".pdf, .json">
+        <button type="submit">Subir archivo</button>
+    </form>
+{% endblock %}

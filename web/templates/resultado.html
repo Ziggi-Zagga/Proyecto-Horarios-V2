@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Resultado del Algoritmo</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 40px; background-color: #e8f5e9; }
+        .caja-resultado { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h1 { color: #2e7d32; }
+        .destacado { font-size: 20px; font-weight: bold; color: #d32f2f; }
+    </style>
+</head>
+<body>
+
+    <div class="caja-resultado">
+        <h1>Resultado de la Evaluación</h1>
+        <p><strong>Mensaje del servidor:</strong> {{ datos.mensaje }}</p>
+
+        <hr>
+
+        <ul>
+            <li><strong>Slot Óptimo:</strong> <span class="destacado">{{ datos.slot_optimo }}</span></li>
+            <li><strong>Coste Total:</strong> {{ datos.coste_total }} puntos</li>
+            <li><strong>Peor Penalización Individual:</strong> {{ datos.peor_penalizacion }} puntos</li>
+        </ul>
+
+        <p><button onclick="window.close()">Cerrar esta ventana</button></p>
+    </div>
+
+</body>
+</html>
