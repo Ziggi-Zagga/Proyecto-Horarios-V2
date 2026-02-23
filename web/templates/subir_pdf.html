@@ -1,12 +1,20 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <h1>Subida de Archivos Horarios</h1>
-    <p>Por favor, sube los archivos PDF o JSON con los horarios globales de los profesores.</p>
+    <div class="section-header">
+        <h2>Subida de <span class="highlight">Archivos</span></h2>
+        <p>Importa los horarios globales de los profesores en formato PDF o JSON para que el sistema los procese.</p>
+    </div>
 
-    <form action="#" method="POST" enctype="multipart/form-data" class="formulario-subida">
-        <label for="archivo">Selecciona un archivo:</label>
-        <input type="file" id="archivo" name="archivo" accept=".pdf, .json">
-        <button type="submit">Subir archivo</button>
-    </form>
+    <div class="card upload-card">
+        <form action="#" method="POST" enctype="multipart/form-data" class="formulario-subida">
+            <div class="file-drop-area">
+                <div class="icon" style="margin: 0 auto 15px auto;">📁</div>
+                <h3>Selecciona tu archivo</h3>
+                <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 15px;">Formatos soportados: .pdf, .json</p>
+                <input type="file" id="archivo" name="archivo" accept=".pdf, .json" class="file-input">
+            </div>
+            <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">Subir y Procesar</button>
+        </form>
+    </div>
 {% endblock %}

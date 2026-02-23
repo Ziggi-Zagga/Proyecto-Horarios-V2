@@ -1,8 +1,7 @@
 from flask import Blueprint, render_template
 
 # Creamos el Blueprint llamado 'horarios_bp'
-horarios_bp = ('horarios', __name__)
-
+horarios_bp = Blueprint('horarios', __name__)
 
 # Simulación de la función del algoritmo que hará tu compañero de Backtracking
 def find_best_meeting_slot(indices, equipo_educativo, config):

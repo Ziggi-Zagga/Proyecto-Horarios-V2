@@ -2,30 +2,39 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Resultado del Algoritmo</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 40px; background-color: #e8f5e9; }
-        .caja-resultado { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        h1 { color: #2e7d32; }
-        .destacado { font-size: 20px; font-weight: bold; color: #d32f2f; }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultado | Gestor Escolar</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    <main class="contenedor resultado-container">
+        <div class="card resultado-card">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <div class="icon" style="margin: 0 auto 15px auto; background: rgba(16, 185, 129, 0.1); color: var(--accent-color);">🏆</div>
+                <h2>Resultado de la <span class="highlight">Evaluación</span></h2>
+                <p style="color: var(--text-muted); margin-top: 10px;">{{ datos.mensaje }}</p>
+            </div>
 
-    <div class="caja-resultado">
-        <h1>Resultado de la Evaluación</h1>
-        <p><strong>Mensaje del servidor:</strong> {{ datos.mensaje }}</p>
+            <ul class="resultado-lista">
+                <li>
+                    <span>Slot Óptimo</span>
+                    <span class="destacado">{{ datos.slot_optimo }}</span>
+                </li>
+                <li>
+                    <span>Coste Total</span>
+                    <span style="font-weight: 600;">{{ datos.coste_total }} puntos</span>
+                </li>
+                <li>
+                    <span>Peor Penalización</span>
+                    <span style="font-weight: 600; color: #ef4444;">{{ datos.peor_penalizacion }} puntos</span>
+                </li>
+            </ul>
 
-        <hr>
-
-        <ul>
-            <li><strong>Slot Óptimo:</strong> <span class="destacado">{{ datos.slot_optimo }}</span></li>
-            <li><strong>Coste Total:</strong> {{ datos.coste_total }} puntos</li>
-            <li><strong>Peor Penalización Individual:</strong> {{ datos.peor_penalizacion }} puntos</li>
-        </ul>
-
-        <p><button onclick="window.close()">Cerrar esta ventana</button></p>
-    </div>
-
+            <div style="text-align: center; margin-top: 30px;">
+                <button onclick="window.close()" class="btn btn-secondary">Cerrar ventana</button>
+            </div>
+        </div>
+    </main>
 </body>
 </html>
