@@ -80,7 +80,7 @@ def extraer_datos_profesor(pagina, num_pagina):
          if r['x0'] <= col_x0 + 5 and r['x1'] <= col_x1 + 5
          and 15 <= r['bottom'] - r['top'] <= 130
          and r['top'] > marco['top'] + 5
-         and r['bottom'] < marco['bottom'] - 5],
+         and r['bottom'] <= marco['bottom'] + 2],
         key=lambda r: r['top']
     )
 
@@ -116,7 +116,9 @@ def extraer_datos_profesor(pagina, num_pagina):
         return sesiones
 
     zona_top = filas[0]['top'] - 5
-    zona_bot = filas[-1]['bottom'] + 5
+    # Usamos el borde inferior del MARCO, no de la última fila de la col de horas,
+    # porque los rects de clase de la última sesión se extienden hasta el marco.
+    zona_bot = marco['bottom']
 
     # ── 3. Celdas ocupadas: filtrado GEOMÉTRICO ──────────────────────────────
     #
