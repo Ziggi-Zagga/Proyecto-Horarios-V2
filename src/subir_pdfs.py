@@ -4,170 +4,210 @@ import re
 
 subir_pdfs_bp = Blueprint('subir_pdfs', __name__)
 
-datos_profesores = {}
+datos_profesores = {}   # profesor_id -> list[dict sesión]
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  UTILIDADES
+# ─────────────────────────────────────────────────────────────────────────────
 
 def limpiar_texto(texto):
-    """Limpia caracteres extraños del PDF"""
-    if not texto: return ""
-    texto = str(texto)
-    texto = re.sub(r'\(cid:\d+\)', '', texto)
+    if not texto:
+        return ""
+    texto = re.sub(r'\(cid:\d+\)', '', str(texto))
     texto = texto.replace('~', '-')
     return texto.strip()
 
 
-def es_tarea_independiente(tarea):
-    """Identifica si una tarea no necesita grupo (reuniones, guardias, etc)"""
-    t = tarea.upper()
-    return any(x in t for x in ["1104", "REUNIÓN", "REUNION", "GUARDIA", "RECREO", "CERO", "BUS"])
+# ─────────────────────────────────────────────────────────────────────────────
+#  CONSTANTES
+# ─────────────────────────────────────────────────────────────────────────────
 
+DIA_MAP    = {'LUNES': 0, 'MARTES': 1, 'MIÉRCOLES': 2,
+              'MIERCOLES': 2, 'JUEVES': 3, 'VIERNES': 4}
+DIA_NOMBRE = {0: 'Lunes', 1: 'Martes', 2: 'Miércoles', 3: 'Jueves', 4: 'Viernes'}
+PAT_HORA   = re.compile(r'^\d{1,2}:\d{2}$')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  EXTRACCIÓN GEOMÉTRICA
+#
+#  PRINCIPIO CLAVE:
+#    - Las celdas VACÍAS no generan rectángulo propio; solo se ve el fondo crema.
+#    - Las celdas OCUPADAS siempre tienen su propio rectángulo con texto,
+#      independientemente del color (naranja, azul, gris, amarillo...).
+#    - Por tanto: filtramos por GEOMETRÍA, no por color.
+# ─────────────────────────────────────────────────────────────────────────────
 
 def extraer_datos_profesor(pagina, num_pagina):
-    horario_profesor = []
+    sesiones = []
+    words = pagina.extract_words()
+    rects = pagina.rects
 
-    # Estrategia geométrica estricta
-    tablas = pagina.extract_tables({
-        "vertical_strategy": "lines",
-        "horizontal_strategy": "lines"
-    })
+    # ── 1. Columnas de días ──────────────────────────────────────────────────
+    dia_centros = {}
+    for w in words:
+        k = limpiar_texto(w['text']).upper()
+        if k in DIA_MAP and DIA_MAP[k] not in dia_centros:
+            dia_centros[DIA_MAP[k]] = (w['x0'] + w['x1']) / 2
 
-    if not tablas:
-        return horario_profesor
+    if len(dia_centros) < 2:
+        return sesiones
 
-    tabla = tablas[0]  # Cogemos solo la tabla principal para omitir la basura del final
-    patron_hora = re.compile(r'\d{1,2}:\d{2}')
+    # Marco grande del horario
+    candidatos = [r for r in rects
+                  if r['x1'] - r['x0'] > 400 and r['bottom'] - r['top'] > 200]
+    if not candidatos:
+        return sesiones
+    marco = sorted(candidatos, key=lambda r: -(r['x1'] - r['x0']))[0]
 
-    # 1. MAPEO DE DÍAS (Evita que el Jueves y Viernes se desplacen)
-    dias_indices = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5}
+    borde_izq = marco['x0'] + 40
+    borde_der = marco['x1']
+    n_dias    = len(dia_centros)
+    ancho_col = (borde_der - borde_izq) / n_dias
 
-    for fila in tabla[:5]:
-        encontrados = 0
-        temp_indices = {}
-        for i, celda in enumerate(fila):
-            texto = limpiar_texto(celda).upper()
-            if "LUNES" in texto:
-                temp_indices[0] = i; encontrados += 1
-            elif "MARTES" in texto:
-                temp_indices[1] = i; encontrados += 1
-            elif "MIÉRCOLES" in texto or "MIERCOLES" in texto:
-                temp_indices[2] = i; encontrados += 1
-            elif "JUEVES" in texto:
-                temp_indices[3] = i; encontrados += 1
-            elif "VIERNES" in texto:
-                temp_indices[4] = i; encontrados += 1
+    dia_limites = {}
+    for i, d in enumerate(sorted(dia_centros)):
+        dia_limites[d] = (borde_izq + i * ancho_col,
+                          borde_izq + (i + 1) * ancho_col)
 
-        if encontrados >= 3:
-            dias_indices.update(temp_indices)
-            break
+    # ── 2. Filas de sesiones ─────────────────────────────────────────────────
+    col_x0 = marco['x0']
+    col_x1 = col_x0 + 45
 
-    estado_dias = {0: None, 1: None, 2: None, 3: None, 4: None}
+    hora_rects = sorted(
+        [r for r in rects
+         if r['x0'] <= col_x0 + 5 and r['x1'] <= col_x1 + 5
+         and 15 <= r['bottom'] - r['top'] <= 130
+         and r['top'] > marco['top'] + 5
+         and r['bottom'] < marco['bottom'] - 5],
+        key=lambda r: r['top']
+    )
 
-    for fila in tabla:
-        if len(fila) == 0: continue
+    hw = [(w['text'], float(w['top'])) for w in words if PAT_HORA.match(w['text'])]
 
-        hora_texto = limpiar_texto(fila[0])
-
-        # Fin del horario, empieza la leyenda
-        if "Periodos" in hora_texto or "Lectivas" in hora_texto or "Materias" in hora_texto:
-            break
-
-        if not patron_hora.search(hora_texto):
+    filas = []
+    sesion_num = 1
+    for hr in hora_rects:
+        horas_en = [h for h, t in hw if hr['top'] <= t <= hr['bottom']]
+        if len(horas_en) >= 2:
+            hi, hf = horas_en[0], horas_en[-1]
+        elif len(horas_en) == 1:
+            hi = hf = horas_en[0]
+        else:
             continue
 
-        hora_limpia = hora_texto.replace('\n', ' a ')
+        # Recreo = existe rect de anchura total en esta misma fila
+        es_recreo = any(
+            r['x1'] - r['x0'] > 400 and abs(r['top'] - hr['top']) < 3
+            for r in rects if r is not marco
+        )
 
-        # 2. EL RECREO
-        es_recreo_fila = "11:00" in hora_limpia and "11:30" in hora_limpia
-        if es_recreo_fila:
-            for dia_num in range(5):
-                horario_profesor.append({
-                    "dia": dia_num,
-                    "hora_original": hora_limpia,
-                    "tarea": "☕ RECREO",
-                    "grupo": "-",
-                    "aula": "-"
-                })
-                estado_dias[dia_num] = None
+        filas.append({
+            'top': hr['top'], 'bottom': hr['bottom'],
+            'hi': hi, 'hf': hf,
+            'es_recreo': es_recreo,
+            'sesion_num': sesion_num if not es_recreo else None,
+        })
+        if not es_recreo:
+            sesion_num += 1
+
+    if not filas:
+        return sesiones
+
+    zona_top = filas[0]['top'] - 5
+    zona_bot = filas[-1]['bottom'] + 5
+
+    # ── 3. Celdas ocupadas: filtrado GEOMÉTRICO ──────────────────────────────
+    #
+    #  Una celda de clase cumple:
+    #    a) x0 a la derecha de la columna de horas
+    #    b) ancho <= ancho de una columna * 1.6  (no es el marco grande)
+    #    c) altura > 15 px
+    #    d) dentro de la zona horaria
+    #    e) tiene texto no vacío  (celdas libres no generan rect propio)
+    #
+    umbral_x0 = marco['x0'] + 35
+    max_ancho  = ancho_col * 1.6
+    top_minimo = filas[0]['top'] - 3
+
+    clase_rects = sorted(
+        [r for r in rects
+         if r['x0'] >= umbral_x0
+         and r['x1'] - r['x0'] <= max_ancho
+         and r['bottom'] - r['top'] > 15
+         and r['top'] >= top_minimo
+         and r['top'] <= zona_bot
+         and r['bottom'] <= zona_bot + 10],
+        key=lambda r: (r['top'], r['x0'])
+    )
+
+    for rect in clase_rects:
+        cx = (rect['x0'] + rect['x1']) / 2
+
+        # Determinar día
+        dia_num = None
+        for d, (xl, xr) in dia_limites.items():
+            if xl - 5 <= rect['x0'] and rect['x1'] <= xr + 5:
+                dia_num = d
+                break
+        if dia_num is None:
+            for d, (xl, xr) in dia_limites.items():
+                if xl <= cx <= xr:
+                    dia_num = d
+                    break
+        if dia_num is None:
             continue
 
-        # 3. EXTRACCIÓN Y FUSIÓN DE HORAS
-        for dia_num in range(5):
-            col_idx = dias_indices.get(dia_num)
-            celda = fila[col_idx] if (col_idx is not None and col_idx < len(fila)) else None
+        # Sesiones cubiertas (sin recreo)
+        filas_cub = [f for f in filas
+                     if min(rect['bottom'], f['bottom']) - max(rect['top'], f['top']) > 10
+                     and not f['es_recreo']]
+        if not filas_cub:
+            continue
 
-            # --- A. Fusión Geométrica (El PDF dice literalmente que es la misma caja) ---
-            if celda is None:
-                if estado_dias[dia_num] is not None:
-                    clase_ant = estado_dias[dia_num]
-                    hora_inicio = clase_ant["hora_original"].split(' a ')[0]
-                    hora_fin = hora_limpia.split(' a ')[1] if ' a ' in hora_limpia else hora_limpia
-                    clase_ant["hora_original"] = f"{hora_inicio} a {hora_fin}"
-                continue
+        hora_inicio  = filas_cub[0]['hi']
+        hora_fin     = filas_cub[-1]['hf']
+        num_sesiones = len(filas_cub)
+        sesion_num_i = filas_cub[0]['sesion_num']
 
-            texto_celda = limpiar_texto(celda)
+        # Texto
+        crop  = pagina.crop((rect['x0'], rect['top'], rect['x1'], rect['bottom']))
+        txt   = limpiar_texto(crop.extract_text() or "")
+        lineas = [l.strip() for l in txt.split('\n') if l.strip()]
 
-            # --- B. Hueco Libre ---
-            if texto_celda == "":
-                estado_dias[dia_num] = None
-                continue
+        if not lineas:
+            continue   # Celda vacía real (no debería ocurrir, pero por si acaso)
 
-            lineas = [L.strip() for L in texto_celda.split('\n') if L.strip()]
-            if not lineas:
-                estado_dias[dia_num] = None
-                continue
+        tarea = lineas[0]
+        grupo = lineas[1] if len(lineas) > 1 else "-"
+        aula  = lineas[2] if len(lineas) > 2 else "-"
 
-            # Detectamos los elementos
-            tarea = lineas[0]
-            grupo = lineas[1] if len(lineas) > 1 else "Sin grupo"
-            aula = lineas[2] if len(lineas) > 2 else "Sin aula"
+        if 'recreo' in tarea.lower():
+            continue   # Algunas páginas tienen celdas de recreo individuales
 
-            if "recreo" in texto_celda.lower():
-                tarea, grupo, aula = "☕ RECREO", "-", "-"
+        grupo_principal = grupo.split('-')[0].split(',')[0].strip() if grupo != "-" else "-"
 
-            # --- C. Fusión Inteligente (El texto se ha partido a la mitad) ---
-            merged = False
-            if estado_dias[dia_num] is not None:
-                clase_ant = estado_dias[dia_num]
+        sesiones.append({
+            'dia':             dia_num,
+            'dia_nombre':      DIA_NOMBRE[dia_num],
+            'hora_original':   f"{hora_inicio} a {hora_fin}",
+            'hora_inicio':     hora_inicio,
+            'hora_fin':        hora_fin,
+            'num_sesiones':    num_sesiones,
+            'sesion_num':      sesion_num_i,
+            'tarea':           tarea,
+            'grupo':           grupo,
+            'grupo_principal': grupo_principal,
+            'aula':            aula,
+        })
 
-                # Regla 1: Son clases idénticas en horas seguidas
-                es_misma_clase = (clase_ant["tarea"] == tarea and clase_ant["grupo"] == grupo)
+    return sesiones
 
-                # Regla 2: El texto se cortó (arriba Asignatura, abajo el Grupo)
-                es_mitad_abajo = (
-                        clase_ant["grupo"] == "Sin grupo"
-                        and not es_tarea_independiente(clase_ant["tarea"])  # Impide fusionar "1104-CTVP" con "Lengua"
-                )
 
-                if es_misma_clase or es_mitad_abajo:
-                    # Actualizamos la hora sumando las dos
-                    hora_inicio = clase_ant["hora_original"].split(' a ')[0]
-                    hora_fin = hora_limpia.split(' a ')[1] if ' a ' in hora_limpia else hora_limpia
-                    clase_ant["hora_original"] = f"{hora_inicio} a {hora_fin}"
-
-                    if es_mitad_abajo:
-                        # Recuperamos el grupo y el aula que se habían quedado en la celda de abajo
-                        clase_ant["grupo"] = lineas[0] if len(lineas) > 0 else clase_ant["grupo"]
-                        clase_ant["aula"] = lineas[1] if len(lineas) > 1 else clase_ant["aula"]
-
-                    merged = True
-
-            if merged:
-                continue  # Como lo hemos fusionado, no creamos una clase nueva
-
-            # --- D. Crear nueva clase ---
-            nueva_clase = {
-                "dia": dia_num,
-                "hora_original": hora_limpia,
-                "tarea": tarea,
-                "grupo": grupo,
-                "aula": aula
-            }
-
-            horario_profesor.append(nueva_clase)
-            estado_dias[dia_num] = nueva_clase
-
-    return horario_profesor
-
+# ─────────────────────────────────────────────────────────────────────────────
+#  RUTAS FLASK
+# ─────────────────────────────────────────────────────────────────────────────
 
 @subir_pdfs_bp.route('/procesar', methods=['POST'])
 def procesar_subida():
@@ -184,13 +224,11 @@ def procesar_subida():
         with pdfplumber.open(archivo) as pdf:
             for num_pagina, pagina in enumerate(pdf.pages):
                 profesor_id = f"Profesor {(num_pagina + 1):03d}"
-                datos = extraer_datos_profesor(pagina, num_pagina)
-                datos_profesores[profesor_id] = datos
-
+                datos_profesores[profesor_id] = extraer_datos_profesor(pagina, num_pagina)
         return redirect(url_for('subir_pdfs.lista_profesores'))
-    else:
-        flash('Por favor, sube un PDF válido.')
-        return redirect(url_for('subir_pdf'))
+
+    flash('Por favor, sube un PDF válido.')
+    return redirect(url_for('subir_pdf'))
 
 
 @subir_pdfs_bp.route('/profesores')
@@ -201,16 +239,47 @@ def lista_profesores():
 @subir_pdfs_bp.route('/profesor/<profesor_id>')
 def detalle_profesor(profesor_id):
     sesiones = datos_profesores.get(profesor_id, [])
-    dias_semana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes']
-    horario_agrupado = {dia: [] for dia in dias_semana}
+    horario_agrupado = {DIA_NOMBRE[d]: [] for d in range(5)}
 
     for sesion in sesiones:
-        nombre_dia = dias_semana[sesion['dia']]
+        nombre_dia = DIA_NOMBRE.get(sesion['dia'], 'Desconocido')
         horario_agrupado[nombre_dia].append({
-            "hora": sesion['hora_original'],
-            "tarea": sesion['tarea'],
-            "grupo": sesion['grupo'],
-            "aula": sesion['aula']
+            "hora":         sesion['hora_original'],
+            "tarea":        sesion['tarea'],
+            "grupo":        sesion['grupo'],
+            "aula":         sesion['aula'],
+            "num_sesiones": sesion['num_sesiones'],
         })
 
-    return render_template('profesor_detalle.html', profesor_id=profesor_id, horario_agrupado=horario_agrupado)
+    return render_template(
+        'profesor_detalle.html',
+        profesor_id=profesor_id,
+        horario_agrupado=horario_agrupado,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  FUNCIÓN PÚBLICA PARA EL MÓDULO DE BACKTRACKING
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_horario_global():
+    """
+    Devuelve lista plana de sesiones para build_indices().
+    Sesiones dobles/triples generan una entrada por cada hora lectiva.
+    Campos: profesor_id, dia (0-4), hora (int), grupo, aula, tarea
+    """
+    horario = []
+    for profesor_id, sesiones in datos_profesores.items():
+        for s in sesiones:
+            if s['sesion_num'] is None:
+                continue
+            for offset in range(s['num_sesiones']):
+                horario.append({
+                    'profesor_id': profesor_id,
+                    'dia':         s['dia'],
+                    'hora':        s['sesion_num'] + offset,
+                    'grupo':       s['grupo_principal'],
+                    'aula':        s['aula'],
+                    'tarea':       s['tarea'],
+                })
+    return horario
