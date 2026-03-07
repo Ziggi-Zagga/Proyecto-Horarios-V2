@@ -1,47 +1,72 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <header class="hero">
-        <div class="hero-content">
-            <h1>Generador de Evaluaciones <br> <span class="highlight">Inteligente</span></h1>
-            <p>Optimiza el tiempo de tu centro educativo. Sube los datos, ajusta los parámetros y deja que nuestro sistema genere los mejores horarios automáticamente.</p>
-            <div class="hero-buttons">
-                <a href="{{ url_for('subir_pdf') }}" class="btn btn-primary">Comenzar ahora</a>
-                <a href="#estadisticas" class="btn btn-secondary">Ver estado</a>
+<header class="hero">
+
+    <div class="hero-content">
+
+        <h1>
+            Generador de Evaluaciones <br>
+            <span class="highlight">Inteligente</span>
+        </h1>
+
+        <p>
+            Optimiza el tiempo del centro educativo.
+            Sube los datos y deja que el sistema genere
+            los mejores horarios automáticamente.
+        </p>
+
+        <div class="hero-buttons">
+
+            <a href="{{ url_for('subir') }}" class="btn btn-primary">
+                Comenzar ahora
+            </a>
+
+            <a href="#estadisticas" class="btn btn-secondary">
+                Ver estado
+            </a>
+
+        </div>
+
+    </div>
+
+</header>
+
+
+<section id="estadisticas" class="estadisticas-section">
+
+    <div class="section-header">
+        <h2>Panel de Control</h2>
+        <p>Resumen del estado del sistema</p>
+    </div>
+
+    <div class="grid-estadisticas">
+
+        <div class="card stat-card">
+            <div class="icon">👩‍🏫</div>
+            <div class="stat-info">
+                <h3>42</h3>
+                <p>Profesores registrados</p>
             </div>
         </div>
-    </header>
 
-    <section id="estadisticas" class="estadisticas-section">
-        <div class="section-header">
-            <h2>Panel de Control</h2>
-            <p>Resumen del estado actual del sistema</p>
-        </div>
-
-        <div class="grid-estadisticas">
-            <div class="card stat-card">
-                <div class="icon">👩‍🏫</div>
-                <div class="stat-info">
-                    <h3>42</h3>
-                    <p>Profesores registrados</p>
-                </div>
-            </div>
-
-            <div class="card stat-card">
-                <div class="icon">📚</div>
-                <div class="stat-info">
-                    <h3>15</h3>
-                    <p>Grupos disponibles</p>
-                </div>
-            </div>
-
-            <div class="card stat-card highlight-card">
-                <div class="icon">✅</div>
-                <div class="stat-info">
-                    <h3>Listo</h3>
-                    <p>Estado del sistema</p>
-                </div>
+        <div class="card stat-card">
+            <div class="icon">📚</div>
+            <div class="stat-info">
+                <h3>15</h3>
+                <p>Grupos disponibles</p>
             </div>
         </div>
-    </section>
+
+        <div class="card stat-card highlight-card">
+            <div class="icon">✅</div>
+            <div class="stat-info">
+                <h3>Listo</h3>
+                <p>Estado del sistema</p>
+            </div>
+        </div>
+
+    </div>
+
+</section>
 {% endblock %}

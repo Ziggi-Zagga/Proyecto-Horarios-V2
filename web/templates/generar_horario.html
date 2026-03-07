@@ -1,20 +1,57 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <div class="section-header">
-        <h2>Generador del <span class="highlight">Mejor Horario</span></h2>
-        <p>El sistema está listo. Ejecuta el algoritmo de optimización para analizar las combinaciones.</p>
-    </div>
 
-    <div class="card action-card">
-        <div class="icon" style="margin: 0 auto 20px auto;">⚙️</div>
-        <h3 style="margin-bottom: 15px; font-size: 1.8rem;">Iniciar Proceso</h3>
-        <p style="color: var(--text-muted); margin-bottom: 30px;">Nuestro algoritmo evaluará todas las posibilidades para encontrar el hueco de reunión con menor penalización para todo el equipo educativo.</p>
+<div class="section-header">
+    <h2>Generador del <span class="highlight">Mejor Horario</span></h2>
+    <p>Selecciona los profesores que participarán en la reunión.</p>
+</div>
 
-        <form action="{{ url_for('horarios.calcular') }}" method="GET" target="_blank">
-            <button type="submit" class="btn btn-primary" style="font-size: 1.2rem; padding: 15px 40px; width: 100%;">
-                🚀 Ejecutar Algoritmo
-            </button>
-        </form>
-    </div>
+<div class="card action-card">
+
+    <div class="icon" style="margin:0 auto 20px auto;">⚙️</div>
+
+    <h3 style="margin-bottom:15px;font-size:1.8rem;">
+        Profesores cargados
+    </h3>
+
+    <p style="color:var(--text-muted);margin-bottom:30px;">
+        Marca los profesores que quieres incluir en el cálculo.
+    </p>
+
+    <form action="{{ url_for('generar_post') }}" method="POST">
+
+        <div style="text-align:left;margin-bottom:25px;max-height:300px;overflow:auto;">
+
+        {% for profesor in equipo %}
+
+            <label style="display:block;margin-bottom:8px;font-size:1rem;">
+
+                <input
+                    type="checkbox"
+                    name="profesores"
+                    value="{{ profesor }}"
+                    checked
+                >
+
+                {{ profesor }}
+
+            </label>
+
+        {% endfor %}
+
+        </div>
+
+        <button
+            type="submit"
+            class="btn btn-primary"
+            style="font-size:1.2rem;padding:15px 40px;width:100%;"
+        >
+            🚀 Ejecutar Algoritmo
+        </button>
+
+    </form>
+
+</div>
+
 {% endblock %}

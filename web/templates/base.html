@@ -4,28 +4,45 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestor Escolar | Optimizador de Horarios</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
+
 <body>
 
-    <nav class="navbar">
-        <div class="logo">
-            <span class="logo-icon">📊</span> Gestor Escolar
-        </div>
-        <ul class="nav-links">
-            <li><a href="{{ url_for('inicio') }}">Inicio</a></li>
-            <li><a href="{{ url_for('subir_pdf') }}">Subir PDFs</a></li>
-            <li><a href="{{ url_for('generar_horario') }}" class="btn-nav">Generar Horario</a></li>
-        </ul>
-    </nav>
+<nav class="navbar">
 
-    <main class="contenedor">
-        {% block content %}
-        {% endblock %}
-    </main>
+    <div class="logo">
+        <span class="logo-icon">📊</span> Gestor Escolar
+    </div>
+
+    <ul class="nav-links">
+
+        <li>
+            <a href="{{ url_for('index') }}">Inicio</a>
+        </li>
+
+        <li>
+            <a href="{{ url_for('subir') }}">Subir archivo</a>
+        </li>
+
+        <li>
+            <a href="{{ url_for('generar') }}" class="btn-nav">Generar horario</a>
+        </li>
+
+    </ul>
+
+</nav>
+
+<main class="contenedor">
+    {% block content %}
+    {% endblock %}
+</main>
 
 </body>
 </html>
