@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="section-header">
+        <h2>Horario: <span class="highlight">{{ profesor_id }}</span></h2>
+        <p>Vista detallada de las clases, organizadas por día de la semana.</p>
+    </div>
+
+    <div class="card" style="display: block; max-width: 900px; margin: 0 auto; padding: 40px;">
+
+        <div style="margin-bottom: 30px;">
+            <a href="{{ url_for('subir_pdfs.lista_profesores') }}" class="btn btn-secondary">← Volver al listado</a>
+        </div>
+
+        <div class="horario-container">
+            {% for dia, clases in horario_agrupado.items() %}
+                <div class="dia-bloque" style="margin-bottom: 30px; background: rgba(0, 0, 0, 0.2); padding: 20px; border-radius: 12px; border-left: 5px solid var(--accent-color);">
+
+                    <h3 style="color: var(--text-main); font-size: 1.5rem; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
+                        📅 {{ dia }}
+                    </h3>
+
+                    {% if clases|length == 0 %}
+                        <p style="color: var(--text-muted); font-style: italic; font-size: 1.1rem; padding-left: 10px;">
+                            💤 No tiene clase
+                        </p>
+
+                    {% else %}
+                        <ul style="list-style: none; padding: 0;">
+                            {% for clase in clases %}
+                                <li style="margin-bottom: 15px; background: var(--surface-color); padding: 15px 20px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.02);">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+
+                                        <div>
+                                            <span style="color: var(--accent-color); font-weight: bold; font-size: 1.1rem; display: block; margin-bottom: 5px;">
+                                                🕒 De {{ clase.hora }}
+                                            </span>
+                                            <span style="color: white; font-size: 1.1rem; font-weight: 500;">
+                                                📚 {{ clase.tarea }}
+                                            </span>
+                                        </div>
+
+                                        <div style="text-align: right; color: var(--text-muted);">
+                                            <span style="display: block; margin-bottom: 3px;">
+                                                👥 Grupo: <strong style="color: #e2e8f0;">{{ clase.grupo }}</strong>
+                                            </span>
+                                            <span>
+                                                📍 Aula: <strong style="color: #e2e8f0;">{{ clase.aula }}</strong>
+                                            </span>
+                                        </div>
+
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+
+                </div>
+            {% endfor %}
+        </div>
+
+    </div>
+{% endblock %}

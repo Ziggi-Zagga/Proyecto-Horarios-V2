@@ -7,10 +7,12 @@ from flask import Flask, render_template
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.logica_horarios import horarios_bp
+from src.subir_pdfs import subir_pdfs_bp
 
 app = Flask(__name__)
 
 app.register_blueprint(horarios_bp)
+app.register_blueprint(subir_pdfs_bp)
 
 @app.route('/')
 def inicio():

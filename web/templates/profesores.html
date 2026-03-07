@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block content %}
+    <div class="section-header">
+        <h2>Listado de <span class="highlight">Profesores</span></h2>
+        <p>Datos extraídos exitosamente. Selecciona un profesor para revisar su horario detectado.</p>
+    </div>
+
+    <div style="max-width: 800px; margin: 0 auto 30px auto;">
+        <input type="text" id="buscador" placeholder="🔍 Escribe para filtrar profesores..." 
+               style="width: 100%; padding: 15px 20px; border-radius: 12px; background: var(--surface-color); border: 1px solid rgba(255,255,255,0.1); color: var(--text-main); font-size: 1.1rem; outline: none; transition: border-color 0.3s ease;">
+    </div>
+
+    <div class="grid-estadisticas" id="lista-profesores">
+        {% for profesor in profesores %}
+        <a href="{{ url_for('subir_pdfs.detalle_profesor', profesor_id=profesor) }}" class="card item-profesor" style="text-decoration: none;">
+            <div class="icon">👤</div>
+            <div class="stat-info">
+                <h3 style="font-size: 1.5rem;">{{ profesor }}</h3>
+                <p>Ver horario extraído</p>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    <script>
+        document.getElementById('buscador').addEventListener('input', function(e) {
+            const filtro = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('.item-profesor');
+            
+            items.forEach(item => {
+                // Buscamos dentro de la etiqueta H3 de la tarjeta
+                const nombre = item.querySelector('h3').textContent.toLowerCase();
+                if (nombre.includes(filtro)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    </script>
+{% endblock %}
