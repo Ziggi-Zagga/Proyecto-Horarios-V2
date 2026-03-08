@@ -1,20 +1,195 @@
 {% extends 'base.html' %}
 
 {% block content %}
-    <div class="section-header">
-        <h2>Generador del <span class="highlight">Mejor Horario</span></h2>
-        <p>El sistema está listo. Ejecuta el algoritmo de optimización para analizar las combinaciones.</p>
+<div class="section-header">
+  <h2>Generador del <span class="highlight">Mejor Hueco</span></h2>
+  <p>Configura los filtros, selecciona el grupo y el algoritmo encontrará la sesión de evaluación óptima.</p>
+</div>
+
+{% if not hay_datos %}
+<div class="alerta-sin-datos">
+  <span class="icon">⚠️</span>
+  <p>No hay horarios cargados todavía. <a href="{{ url_for('subir_pdf') }}">Sube el PDF de horarios</a> antes de continuar.</p>
+</div>
+{% endif %}
+
+<form action="{{ url_for('horarios.calcular') }}" method="POST" id="form-filtros">
+<div class="filtros-grid">
+
+  <!-- ── 1. Grupo objetivo ───────────────────────────────────────────── -->
+  <div class="filtro-card card-full">
+    <h3>🎯 Grupo objetivo</h3>
+    <div class="select-wrapper">
+      <input type="text" class="select-search" id="buscador-grupo"
+             placeholder="🔍  Escribe para filtrar grupos..." autocomplete="off">
+      <select name="grupo_objetivo" id="sel-grupo" class="select-custom"
+              size="6" required {% if not hay_datos %}disabled{% endif %}>
+        {% for nivel, grupos in grupos_por_nivel.items() %}
+          <optgroup label="{{ nivel_labels[nivel] }}">
+            {% for g in grupos %}
+              <option value="{{ g }}">{{ g }}</option>
+            {% endfor %}
+          </optgroup>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <!-- ── 2. Horas no lectivas válidas ──────────────────────────────── -->
+  <div class="filtro-card card-full">
+    <h3>📋 Horas no lectivas opcionales
+      <span class="badge-count" id="badge-nl">0</span>
+    </h3>
+    <p style="font-size:0.83rem;color:rgba(255,255,255,0.45);margin-bottom:16px;">
+      Marca qué tipos de horas no lectivas se pueden aprovechar para colocar una evaluación.
+    </p>
+    <div class="check-grid">
+      {% set tipos = [
+        ('GUARDIA',  '🛡️', 'Guardia'),
+        ('REUNION',  '🤝', 'Reunión'),
+        ('1104',     '📎', 'Código 1104'),
+        ('CTVP',     '📊', 'CTVP'),
+        ('RTUT',     '📚', 'R. Tutoría'),
+        ('RBLI',     '📖', 'R. Biblioteca'),
+        ('REAP',     '🏫', 'REAP'),
+        ('CPPL',     '🖥️',  'CPPL'),
+        ('RDDO',     '📋', 'RDDO'),
+      ] %}
+      {% for valor, emoji, etiqueta in tipos %}
+      <label class="check-item" id="ci-{{ valor }}">
+        <input type="checkbox" name="horas_no_lectivas" value="{{ valor }}"
+               onchange="actualizarBadgeNL()">
+        <span class="check-label-wrap">
+          <span class="check-box"></span>
+          <span class="check-label">{{ emoji }} {{ etiqueta }}</span>
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ── 3. Días disponibles por nivel ─────────────────────────────── -->
+  <div class="filtro-card">
+    <h3>📅 Días disponibles por nivel</h3>
+    <p style="font-size:0.83rem;color:rgba(255,255,255,0.45);margin-bottom:16px;">
+      Número máximo de días de la semana disponibles para evaluación según el nivel del grupo.
+    </p>
+    <div class="nivel-grid">
+      <div class="nivel-item">
+        <label class="nivel-label">ESO</label>
+        <input type="number" name="dias_eso"  class="nivel-input"
+               min="1" max="5" value="5" {% if not hay_datos %}disabled{% endif %}>
+      </div>
+      <div class="nivel-item">
+        <label class="nivel-label">Bachillerato</label>
+        <input type="number" name="dias_bach" class="nivel-input"
+               min="1" max="5" value="5" {% if not hay_datos %}disabled{% endif %}>
+      </div>
+      <div class="nivel-item">
+        <label class="nivel-label">1º FP</label>
+        <input type="number" name="dias_1fp"  class="nivel-input"
+               min="1" max="5" value="5" {% if not hay_datos %}disabled{% endif %}>
+      </div>
+      <div class="nivel-item">
+        <label class="nivel-label">2º FP</label>
+        <input type="number" name="dias_2fp"  class="nivel-input"
+               min="1" max="5" value="5" {% if not hay_datos %}disabled{% endif %}>
+      </div>
+      <div class="nivel-item">
+        <label class="nivel-label">FP Superior</label>
+        <input type="number" name="dias_sup"  class="nivel-input"
+               min="1" max="5" value="5" {% if not hay_datos %}disabled{% endif %}>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 4. Opciones booleanas ──────────────────────────────────────── -->
+  <div class="filtro-card">
+    <h3>⚙️ Opciones adicionales</h3>
+
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-title">Permitir 7ª hora</div>
+        <div class="toggle-desc">¿Se pueden colocar evaluaciones en la última sesión del día?</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" name="permitir_septima"
+               {% if not hay_datos %}disabled{% endif %}>
+        <span class="toggle-track"></span>
+      </label>
     </div>
 
-    <div class="card action-card">
-        <div class="icon" style="margin: 0 auto 20px auto;">⚙️</div>
-        <h3 style="margin-bottom: 15px; font-size: 1.8rem;">Iniciar Proceso</h3>
-        <p style="color: var(--text-muted); margin-bottom: 30px;">Nuestro algoritmo evaluará todas las posibilidades para encontrar el hueco de reunión con menor penalización para todo el equipo educativo.</p>
-
-        <form action="{{ url_for('horarios.calcular') }}" method="GET" target="_blank">
-            <button type="submit" class="btn btn-primary" style="font-size: 1.2rem; padding: 15px 40px; width: 100%;">
-                🚀 Ejecutar Algoritmo
-            </button>
-        </form>
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-title">Permitir recreo</div>
+        <div class="toggle-desc">¿El recreo es susceptible de albergar una evaluación?</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" name="permitir_recreo"
+               {% if not hay_datos %}disabled{% endif %}>
+        <span class="toggle-track"></span>
+      </label>
     </div>
+  </div>
+
+  <!-- ── Botón submit ──────────────────────────────────────────────── -->
+  <div class="card-full" style="text-align:center;">
+    <button type="submit" class="btn-calcular"
+            {% if not hay_datos %}disabled title="Primero sube el PDF"{% endif %}>
+      🚀 Calcular mejor hueco de evaluación
+    </button>
+  </div>
+
+</div>
+</form>
+
+<script>
+// ── Filtro de búsqueda en el select de grupos ──────────────────────────────
+const buscador = document.getElementById('buscador-grupo');
+const selectGrupo = document.getElementById('sel-grupo');
+
+if (buscador && selectGrupo) {
+  buscador.addEventListener('input', function () {
+    const q = this.value.toLowerCase();
+    for (const og of selectGrupo.querySelectorAll('optgroup')) {
+      let visibles = 0;
+      for (const opt of og.querySelectorAll('option')) {
+        const match = opt.value.toLowerCase().includes(q);
+        opt.style.display = match ? '' : 'none';
+        if (match) visibles++;
+      }
+      og.style.display = visibles > 0 ? '' : 'none';
+    }
+  });
+}
+
+// ── Badge contador de horas no lectivas ────────────────────────────────────
+function actualizarBadgeNL() {
+  const n = document.querySelectorAll('input[name="horas_no_lectivas"]:checked').length;
+  const badge = document.getElementById('badge-nl');
+  if (badge) badge.textContent = n;
+
+  // Resaltar visualmente los check-items marcados
+  document.querySelectorAll('.check-item').forEach(item => {
+    const cb = item.querySelector('input[type=checkbox]');
+    if (cb && cb.checked) {
+      item.style.background = 'rgba(var(--accent-rgb, 99,102,241), 0.12)';
+      item.style.borderColor = 'var(--accent-color)';
+    } else {
+      item.style.background = '';
+      item.style.borderColor = '';
+    }
+  });
+}
+
+// Asegurar que el formulario valide grupo seleccionado
+document.getElementById('form-filtros')?.addEventListener('submit', function(e) {
+  if (!selectGrupo || !selectGrupo.value) {
+    e.preventDefault();
+    buscador.style.borderColor = 'red';
+    buscador.placeholder = '⚠️  Selecciona un grupo primero';
+    buscador.focus();
+  }
+});
+</script>
 {% endblock %}

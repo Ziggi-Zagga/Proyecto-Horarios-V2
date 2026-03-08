@@ -24,7 +24,15 @@ def subir_pdf():
 
 @app.route('/generar-horario')
 def generar_horario():
-    return render_template('generar_horario.html')
+    from src.subir_pdfs import datos_profesores
+    from src.logica_horarios import grupos_por_nivel, NIVEL_LABELS
+
+    return render_template(
+        'generar_horario.html',
+        grupos_por_nivel=grupos_por_nivel(datos_profesores),
+        nivel_labels=NIVEL_LABELS,
+        hay_datos=bool(datos_profesores),
+    )
 
 if __name__ == '__main__':
     app.run(debug=True)
