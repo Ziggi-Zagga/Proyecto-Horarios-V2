@@ -619,3 +619,289 @@ body {
     cursor: not-allowed;
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+/* ==========================================================================
+   ESTILOS DE LOS RESULTADOS (Hueco Encontrado / Sin Solución)
+   ========================================================================== */
+
+.resultado-wrapper {
+    max-width: 860px;
+    margin: 0 auto;
+}
+
+/* --- Cabecera del resultado --- */
+.resultado-hero {
+    text-align: center;
+    padding: 40px 20px 30px;
+}
+
+.resultado-hero .icon-big {
+    font-size: 3rem;
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 20px;
+    margin: 0 auto 20px auto;
+}
+
+.icon-big.ok  {
+    background: rgba(16, 185, 129, 0.12);
+}
+
+.icon-big.err {
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.hero-subtitle {
+    color: var(--text-muted);
+    margin-top: 10px;
+}
+
+.hero-subtitle strong {
+    color: var(--text-main);
+}
+
+/* --- Slot destacado (El Resultado Principal) --- */
+.slot-card {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(14, 165, 233, 0.08) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 16px;
+    padding: 28px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1); /* Ligero resplandor verde */
+}
+
+.slot-info {
+    flex: 1;
+}
+
+.slot-dia  {
+    font-size: 2rem;
+    font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.1;
+}
+
+.slot-sesion {
+    font-size: 1rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.slot-metricas {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.metrica {
+    text-align: center;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 14px 22px;
+    min-width: 110px;
+}
+
+.metrica-valor {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-main);
+    line-height: 1;
+}
+
+.metrica-valor.rojo {
+    color: #f87171; /* Rojo suave para métricas malas */
+}
+
+.metrica-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+/* --- Info resumen (Tarjetas pequeñas) --- */
+.resumen-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+}
+
+.resumen-item {
+    background: var(--surface-color);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: transform 0.2s ease;
+}
+
+.resumen-item:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.resumen-item .ri-icon {
+    font-size: 1.4rem;
+}
+
+.ri-label {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.ri-valor {
+    font-size: 0.98rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+/* --- Tabla de detalle por profesor --- */
+.detalle-card {
+    background: var(--surface-color);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.detalle-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.detalle-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.detalle-table th {
+    text-align: left;
+    padding: 12px 20px;
+    font-size: 0.73rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.detalle-table td {
+    padding: 14px 20px;
+    font-size: 0.9rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    color: var(--text-main);
+}
+
+.detalle-table tr:last-child td {
+    border-bottom: none;
+}
+
+.detalle-table tr:hover td {
+    background: rgba(255, 255, 255, 0.025);
+}
+
+/* Barra de penalización (Visualización de datos) */
+.pen-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pen-bar-bg {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.pen-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--gradient-primary); /* Relleno por defecto (verde/azul) */
+    transition: width 0.5s ease;
+}
+
+.pen-bar-fill.alta {
+    background: linear-gradient(90deg, #f59e0b, #ef4444); /* Relleno naranja/rojo si es alta */
+}
+
+.pen-val {
+    font-weight: 700;
+    min-width: 20px;
+    text-align: right;
+}
+
+/* Badges de estado (Sí/No) */
+.badge-ok  {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    padding: 4px 12px;
+    border-radius: 99px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.badge-no  {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    padding: 4px 12px;
+    border-radius: 99px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* --- Estado: Sin solución --- */
+.sin-sol-card {
+    background: rgba(239, 68, 68, 0.06);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 16px;
+    padding: 36px;
+    text-align: center;
+    margin-bottom: 24px;
+}
+
+.sin-sol-card h3 {
+    font-size: 1.3rem;
+    color: #f87171;
+    margin-bottom: 12px;
+}
+
+.sin-sol-card p  {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+
+/* --- Botones footer --- */
+.resultado-footer {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding-bottom: 40px;
+    margin-top: 20px;
+}

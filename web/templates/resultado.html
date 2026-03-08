@@ -1,40 +1,147 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resultado | Gestor Escolar</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    <main class="contenedor resultado-container">
-        <div class="card resultado-card">
-            <div style="text-align: center; margin-bottom: 30px;">
-                <div class="icon" style="margin: 0 auto 15px auto; background: rgba(16, 185, 129, 0.1); color: var(--accent-color);">🏆</div>
-                <h2>Resultado de la <span class="highlight">Evaluación</span></h2>
-                <p style="color: var(--text-muted); margin-top: 10px;">{{ datos.mensaje }}</p>
-            </div>
+{% extends 'base.html' %}
 
-            <ul class="resultado-lista">
-                <li>
-                    <span>Slot Óptimo</span>
-                    <span class="destacado">{{ datos.slot_optimo }}</span>
-                </li>
-                <li>
-                    <span>Coste Total</span>
-                    <span style="font-weight: 600;">{{ datos.coste_total }} puntos</span>
-                </li>
-                <li>
-                    <span>Peor Penalización</span>
-                    <span style="font-weight: 600; color: #ef4444;">{{ datos.peor_penalizacion }} puntos</span>
-                </li>
-            </ul>
+{% block content %}
+<div class="resultado-wrapper">
 
-            <div style="text-align: center; margin-top: 30px;">
-                <button onclick="window.close()" class="btn btn-secondary">Cerrar ventana</button>
+  {% if datos.sin_solucion %}
+  {# ══════════════════════════════════════════════════════════════════
+     SIN SOLUCIÓN
+  ══════════════════════════════════════════════════════════════════ #}
+  <div class="resultado-hero">
+    <div class="icon-big err">❌</div>
+    <h2>Sin <span class="highlight">solución</span></h2>
+    <p class="hero-subtitle">{{ datos.mensaje }}</p>
+  </div>
+
+  <div class="sin-sol-card">
+    <h3>No se encontró ningún hueco libre común</h3>
+    <p>
+      Todos los candidatos están bloqueados por al menos un profesor del equipo educativo
+      {% if datos.grupo_objetivo %}del grupo <strong>{{ datos.grupo_objetivo }}</strong>{% endif %}.
+      Prueba a marcar algunas horas no lectivas como libres o a activar la 7ª hora.
+    </p>
+  </div>
+
+  {% else %}
+  {# ══════════════════════════════════════════════════════════════════
+     SOLUCIÓN ENCONTRADA
+  ══════════════════════════════════════════════════════════════════ #}
+  <div class="resultado-hero">
+    <div class="icon-big ok">🏆</div>
+    <h2>Hueco <span class="highlight">óptimo encontrado</span></h2>
+    <p class="hero-subtitle">
+      Evaluación para el grupo
+      <strong>{{ datos.grupo_objetivo or '—' }}</strong>
+    </p>
+  </div>
+
+  <div class="slot-card">
+    <div class="slot-info">
+      <div class="slot-dia">{{ datos.dia_nombre }}</div>
+      <div class="slot-sesion">Sesión nº {{ datos.hora_sesion }}</div>
+    </div>
+    <div class="slot-metricas">
+      <div class="metrica">
+        <div class="metrica-valor">{{ datos.coste_total }}</div>
+        <div class="metrica-label">Coste total</div>
+      </div>
+      <div class="metrica">
+        <div class="metrica-valor rojo">{{ datos.peor_penalizacion }}</div>
+        <div class="metrica-label">Peor pen.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="resumen-grid">
+    <div class="resumen-item">
+      <span class="ri-icon">👥</span>
+      <div>
+        <div class="ri-label">Equipo educativo</div>
+        <div class="ri-valor">{{ datos.equipo_size }} profesores</div>
+      </div>
+    </div>
+    <div class="resumen-item">
+      <span class="ri-icon">🔍</span>
+      <div>
+        <div class="ri-label">Candidatos evaluados</div>
+        <div class="ri-valor">{{ datos.num_candidatos }} slots</div>
+      </div>
+    </div>
+    <div class="resumen-item">
+      <span class="ri-icon">📅</span>
+      <div>
+        <div class="ri-label">Día seleccionado</div>
+        <div class="ri-valor">{{ datos.dia_nombre }}</div>
+      </div>
+    </div>
+    <div class="resumen-item">
+      <span class="ri-icon">🎯</span>
+      <div>
+        <div class="ri-label">Sesión lectiva</div>
+        <div class="ri-valor">{{ datos.hora_sesion }}ª hora</div>
+      </div>
+    </div>
+  </div>
+
+  {% if datos.detalle_por_profesor %}
+  <div class="detalle-card">
+    <div class="detalle-header">
+      📋 Detalle por profesor
+    </div>
+    <table class="detalle-table">
+      <thead>
+        <tr>
+          <th>Profesor</th>
+          <th>Penalización</th>
+          <th>Sesión más cercana</th>
+          <th>Ese día</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in datos.detalle_por_profesor | sort(attribute='penalizacion', reverse=True) %}
+        <tr>
+          <td><strong>{{ d.profesor_id }}</strong></td>
+          <td>
+            <div class="pen-bar-wrap">
+              <div class="pen-bar-bg">
+                <div class="pen-bar-fill {% if d.penalizacion >= 5 %}alta{% endif %}"
+                     style="width: {{ (d.penalizacion / 7 * 100)|round }}%">
+                </div>
+              </div>
+              <span class="pen-val">{{ d.penalizacion }}</span>
             </div>
-        </div>
-    </main>
-</body>
-</html>
+          </td>
+          <td>
+            {% if d.sesion_ocupada_cercana %}
+              Sesión {{ d.sesion_ocupada_cercana }}
+            {% else %}
+              <span style="color:var(--text-muted);">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if d.tiene_sesiones_ese_dia %}
+              <span class="badge-ok">✓ Sí</span>
+            {% else %}
+              <span class="badge-no">✗ No</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% endif %}
+
+  <div class="resultado-footer">
+    <a href="{{ url_for('generar_horario') }}" class="btn btn-primary">
+      🔄 Nueva búsqueda
+    </a>
+    <a href="{{ url_for('inicio') }}" class="btn btn-secondary">
+      🏠 Inicio
+    </a>
+  </div>
+
+</div>
+{% endblock %}
