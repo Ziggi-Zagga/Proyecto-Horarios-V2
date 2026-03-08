@@ -34,5 +34,9 @@ def generar_horario():
         hay_datos=bool(datos_profesores),
     )
 
+@app.route('/profesores')
+def profesores():
+    return render_template('profesores.html')
+
 if __name__ == '__main__':
     app.run(debug=True)
