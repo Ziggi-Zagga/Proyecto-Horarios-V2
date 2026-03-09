@@ -69,7 +69,7 @@ def calcular():
     # ── Construir config desde el formulario ────────────────────────────────
     config = {
         'horas_no_lectivas_libres': request.form.getlist('horas_no_lectivas'),
-        'permitir_septima':         request.form.get('permitir_septima') == 'on',
+        'permitir_ultima_hora':      request.form.get('permitir_septima') == 'on',
         'permitir_recreo':          request.form.get('permitir_recreo') == 'on',
         'dias_validos':             list(range(5)),
     }

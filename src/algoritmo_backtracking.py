@@ -1,50 +1,69 @@
 """
-algoritmo_backtracking.py
+algoritmo_backtracking.py  — v2 (franjas horarias reales)
 ─────────────────────────────────────────────────────────────────────────────
-Implementa la búsqueda del mejor slot de evaluación usando Backtracking con
-poda Branch & Bound, según las especificaciones del proyecto.
+Trabaja con franjas reales (hora_inicio, hora_fin) en lugar de números de
+sesión, porque el centro tiene turnos de mañana, tarde y partido, con
+distinto número de recreos cada uno.
+
+Franjas lectivas estándar (55 min):
+  Mañana:  08:15, 09:10, 10:05, 11:30, 12:25, 13:20
+  Mediodía: 14:25
+  Tarde:   15:20, 16:15, 17:10, 18:35, 19:30, 20:25
+  Especial: 07:45 (30 min)
+
+Recreos fijos (excluidos siempre de candidatos):
+  11:00–11:30 · 14:15–14:25 · 18:05–18:35
 
 Interfaz pública:
-    build_indices(horario, config)  →  indices
-    get_team_for_group(horario, grupo_objetivo)  →  set[profesor_id]
-    find_best_meeting_slot(indices, equipo_educativo, config)  →  resultado
+  build_indices(horario, config)          → indices
+  get_team_for_group(horario, grupo)      → set[profesor_id]
+  find_best_meeting_slot(indices, equipo, config, grupo) → resultado
 """
 
 from bisect import bisect_left
 from typing import Optional
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  CONFIGURACIÓN POR DEFECTO
+#  DEFINICIÓN DE FRANJAS Y RECREOS
 # ─────────────────────────────────────────────────────────────────────────────
 
-CONFIG_DEFAULT = {
-    # Sesiones lectivas del día (1-7). El recreo se marca aparte.
-    "sesiones_totales": 7,
+# Todas las franjas del centro en orden cronológico (lectivas + recreos)
+# Tupla: (hora_ini, hora_fin, es_recreo)
+FRANJAS_ESTANDAR = [
+    ("07:45", "08:15", False),   # especial 30 min
+    ("08:15", "09:10", False),
+    ("09:10", "10:05", False),
+    ("10:05", "11:00", False),
+    ("11:00", "11:30", True),    # recreo 1
+    ("11:30", "12:25", False),
+    ("12:25", "13:20", False),
+    ("13:20", "14:15", False),
+    ("14:15", "14:25", True),    # recreo 2
+    ("14:25", "15:20", False),
+    ("15:20", "16:15", False),
+    ("16:15", "17:10", False),
+    ("17:10", "18:05", False),
+    ("18:05", "18:35", True),    # recreo 3
+    ("18:35", "19:30", False),
+    ("19:30", "20:25", False),
+    ("20:25", "21:20", False),   # "última hora" de tarde
+]
+RECREOS_INICIO = {ini for ini, fin, es_rec in FRANJAS_ESTANDAR if es_rec}
 
-    # Número de sesión que es el recreo (se excluye como candidata)
-    # En un horario con 7 sesiones lectivas y recreo tras la 4ª,
-    # el recreo sería la posición 4 del bloque de mañana.
-    # Podemos simplemente no añadirla a sesiones_validas si no se permite.
-    "hora_recreo": 4,
+# Franja "última hora" de tarde
+ULTIMA_HORA_INI = "20:25"
 
-    # Si False, la sesión 7 nunca es candidata
-    "permitir_septima": False,
-
-    # Si True, el recreo puede ser slot candidato
-    "permitir_recreo": False,
-
-    # Días válidos (0=Lunes … 4=Viernes)
-    "dias_validos": list(range(5)),
-
-    # Penalización máxima cuando el profesor no tiene sesiones ese día
-    "penalizacion_sin_sesiones": 7,
-
-    # Horas no lectivas que cuentan como LIBRES (no bloquean el slot)
-    # Ej: ["GUARDIA", "REUNION", "1104"]
-    "horas_no_lectivas_libres": [],
-}
+# Penalización máxima (profesor sin sesiones ese día)
+# Equivale a estar "a todo un día de distancia" = 7 sesiones × 55 min
+PEN_SIN_SESIONES = 385   # minutos
 
 DIAS_NOMBRE = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Viernes"}
+
+
+def t2m(hora: str) -> int:
+    """'HH:MM' → minutos desde medianoche."""
+    h, m = map(int, hora.split(":"))
+    return h * 60 + m
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -53,86 +72,84 @@ DIAS_NOMBRE = {0: "Lunes", 1: "Martes", 2: "Miércoles", 3: "Jueves", 4: "Vierne
 
 def build_indices(horario: list[dict], config: dict) -> dict:
     """
-    A partir de la lista plana de sesiones (salida de get_horario_global),
-    construye las estructuras internas que necesita el algoritmo.
+    Construye las estructuras internas del algoritmo a partir de la lista
+    plana de sesiones (salida de get_horario_global).
 
-    Parámetros
-    ----------
-    horario : list[dict]
-        Cada dict tiene: profesor_id, dia (0-4), hora (int 1-7), grupo, tarea, aula
-    config  : dict
-        Opciones (se fusiona con CONFIG_DEFAULT)
-
-    Devuelve
-    --------
-    dict con:
-        cfg              – configuración efectiva
-        sesiones_validas – list[int] sesiones que pueden ser candidatas
-        slots_calendario – list[(dia, hora)] todos los slots candidatos
-        ocupado          – {profesor_id: set((dia, hora))}
-        ocupado_por_dia  – {profesor_id: {dia: list[int] ordenada}}
+    config admite:
+      permitir_recreo      bool  – si True, los recreos son candidatos
+      permitir_ultima_hora bool  – si True, la franja 20:25-21:20 es candidata
+      horas_no_lectivas_libres list[str] – tareas que cuentan como libres
+      dias_validos         list[int]    – días candidatos (0=Lunes…4=Viernes)
     """
-    cfg = {**CONFIG_DEFAULT, **config}
+    permitir_recreo  = config.get("permitir_recreo", False)
+    # compatibilidad con nombre anterior "permitir_septima"
+    permitir_ultima  = config.get("permitir_ultima_hora",
+                                  config.get("permitir_septima", False))
+    dias_validos     = config.get("dias_validos", list(range(5)))
+    nl_libres        = {t.upper() for t in config.get("horas_no_lectivas_libres", [])}
 
-    # ── Sesiones válidas ────────────────────────────────────────────────────
-    sesiones = list(range(1, cfg["sesiones_totales"] + 1))
+    # ── Franjas candidatas ───────────────────────────────────────────────────
+    franjas_candidatas = []
+    for ini, fin, es_recreo in FRANJAS_ESTANDAR:
+        if es_recreo and not permitir_recreo:
+            continue
+        if ini == ULTIMA_HORA_INI and not permitir_ultima:
+            continue
+        # excluir 07:45 (guardia especial de media hora)
+        if ini == "07:45":
+            continue
+        franjas_candidatas.append((ini, fin))
 
-    if not cfg["permitir_recreo"]:
-        sesiones = [s for s in sesiones if s != cfg["hora_recreo"]]
-
-    if not cfg["permitir_septima"]:
-        sesiones = [s for s in sesiones if s != cfg["sesiones_totales"]]
-
-    cfg["sesiones_validas"] = sesiones
-
-    # ── Slots del calendario ────────────────────────────────────────────────
+    # ── Slots del calendario ─────────────────────────────────────────────────
     slots_calendario = [
-        (dia, hora)
-        for dia in cfg["dias_validos"]
-        for hora in sesiones
+        (dia, ini, fin)
+        for dia in dias_validos
+        for ini, fin in franjas_candidatas
     ]
 
-    # ── Índices de ocupación ────────────────────────────────────────────────
-    ocupado: dict[str, set] = {}
+    # ── Índices de ocupación (en minutos) ────────────────────────────────────
+    # ocupado_por_dia: {pid: {dia: [(ini_m, fin_m), ...]}}  ordenado por ini_m
     ocupado_por_dia: dict[str, dict[int, list]] = {}
 
-    no_lectivas_libres = {t.upper() for t in cfg.get("horas_no_lectivas_libres", [])}
-
     for sesion in horario:
-        pid  = sesion["profesor_id"]
-        dia  = sesion["dia"]
-        hora = sesion["hora"]
+        pid   = sesion["profesor_id"]
         tarea = sesion.get("tarea", "").upper()
 
-        # Si la tarea es una hora no lectiva marcada como libre → no bloquea
-        if any(nl in tarea for nl in no_lectivas_libres):
+        # Hora no lectiva marcada como libre → no bloquea
+        if any(nl in tarea for nl in nl_libres):
             continue
 
-        # Normalizar día
+        ini_str = sesion.get("hora_inicio", "")
+        fin_str = sesion.get("hora_fin", "")
+        if not ini_str or not fin_str:
+            continue
+
+        dia = sesion.get("dia", -1)
         if isinstance(dia, str):
-            dia_map = {"lunes":0,"martes":1,"miércoles":2,"miercoles":2,"jueves":3,"viernes":4}
-            dia = dia_map.get(dia.lower(), dia)
-
-        # Filtrar recreo
-        if hora == cfg["hora_recreo"] and not cfg["permitir_recreo"]:
+            dia_map = {"lunes":0,"martes":1,"miércoles":2,"miercoles":2,
+                       "jueves":3,"viernes":4}
+            dia = dia_map.get(dia.lower(), -1)
+        if dia not in range(5):
             continue
 
-        ocupado.setdefault(pid, set()).add((dia, hora))
-        ocupado_por_dia.setdefault(pid, {}).setdefault(dia, [])
-        if hora not in ocupado_por_dia[pid][dia]:
-            ocupado_por_dia[pid][dia].append(hora)
+        ini_m = t2m(ini_str)
+        fin_m = t2m(fin_str)
 
-    # Ordenar listas de horas ocupadas por día (para búsqueda binaria)
+        ocupado_por_dia.setdefault(pid, {}).setdefault(dia, [])
+        par = (ini_m, fin_m)
+        if par not in ocupado_por_dia[pid][dia]:
+            ocupado_por_dia[pid][dia].append(par)
+
+    # Ordenar por hora de inicio
     for pid in ocupado_por_dia:
         for dia in ocupado_por_dia[pid]:
             ocupado_por_dia[pid][dia].sort()
 
     return {
-        "cfg": cfg,
-        "sesiones_validas": sesiones,
-        "slots_calendario": slots_calendario,
-        "ocupado": ocupado,
-        "ocupado_por_dia": ocupado_por_dia,
+        "config":            config,
+        "franjas_candidatas": franjas_candidatas,
+        "slots_calendario":  slots_calendario,
+        "ocupado_por_dia":   ocupado_por_dia,
     }
 
 
@@ -141,10 +158,6 @@ def build_indices(horario: list[dict], config: dict) -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_team_for_group(horario: list[dict], grupo_objetivo: str) -> set:
-    """
-    Devuelve el conjunto de profesor_id que dan clase al grupo_objetivo.
-    Compara con el primer token del grupo (antes del primer '-').
-    """
     objetivo = grupo_objetivo.strip().upper()
     return {
         s["profesor_id"]
@@ -154,32 +167,44 @@ def get_team_for_group(horario: list[dict], grupo_objetivo: str) -> set:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  PASO 3 — CÁLCULO DE PENALIZACIÓN
+#  PASO 3 — PENALIZACIÓN (en minutos)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def penalizacion(pid: str, dia: int, hora: int, indices: dict) -> float:
+def _overlaps(ini_m: int, fin_m: int, sesiones_dia: list) -> bool:
+    """True si el intervalo (ini_m, fin_m) solapa con alguna sesión del día."""
+    for s_ini, s_fin in sesiones_dia:
+        if ini_m < s_fin and fin_m > s_ini:
+            return True
+    return False
+
+
+def penalizacion(pid: str, dia: int, slot_ini: str, slot_fin: str,
+                 indices: dict) -> float:
     """
-    Calcula la penalización de un profesor para un slot (dia, hora).
+    Penalización del profesor 'pid' para el slot (dia, slot_ini, slot_fin).
 
-    Reglas (según especificación):
-      - Si no tiene sesiones ese día → penalización = 7 (máxima).
-      - Si tiene sesiones → distancia mínima en saltos de sesión lectiva
-        al evento ocupado más cercano en ese mismo día.
-        Búsqueda binaria O(log K).
+    - Si no tiene sesiones ese día → PEN_SIN_SESIONES
+    - Si el slot solapa con una sesión ocupada → inf (no viable)
+    - Si está libre → distancia en minutos al intervalo ocupado más cercano
     """
-    horas_dia = indices["ocupado_por_dia"].get(pid, {}).get(dia, [])
+    sesiones_dia = indices["ocupado_por_dia"].get(pid, {}).get(dia, [])
 
-    if not horas_dia:
-        return indices["cfg"]["penalizacion_sin_sesiones"]
+    if not sesiones_dia:
+        return PEN_SIN_SESIONES
 
-    # Búsqueda binaria del vecino más cercano
-    pos = bisect_left(horas_dia, hora)
+    slot_ini_m = t2m(slot_ini)
+    slot_fin_m = t2m(slot_fin)
+
+    # Solapamiento → slot no viable para este profesor
+    if _overlaps(slot_ini_m, slot_fin_m, sesiones_dia):
+        return float("inf")
+
+    # Distancia al intervalo más cercano
     mejor = float("inf")
-
-    if pos < len(horas_dia):
-        mejor = min(mejor, abs(horas_dia[pos] - hora))
-    if pos > 0:
-        mejor = min(mejor, abs(horas_dia[pos - 1] - hora))
+    for s_ini, s_fin in sesiones_dia:
+        # distancia = 0 si son adyacentes, positiva si hay hueco
+        d = min(abs(slot_ini_m - s_fin), abs(s_ini - slot_fin_m))
+        mejor = min(mejor, d)
 
     return mejor
 
@@ -195,165 +220,162 @@ def find_best_meeting_slot(
     grupo_objetivo: Optional[str] = None,
 ) -> dict:
     """
-    Encuentra el slot (dia, hora) óptimo para una evaluación del equipo.
+    Encuentra el slot (dia, hora_inicio, hora_fin) óptimo.
 
-    Criterio de optimalidad (lexicográfico):
-        1. Minimizar coste_total  (suma de penalizaciones)
-        2. Minimizar peor_penalizacion  (minimax, desempate)
-        3. Slot más temprano  (desempate final)
+    Criterio lexicográfico:
+      1. coste_total mínimo (suma de penalizaciones en minutos)
+      2. peor_penalizacion mínima (minimax)
+      3. slot más temprano (lunes antes, mañana antes)
 
-    Usa poda Branch & Bound: si el coste parcial ya supera al mejor
-    conocido, se abandona ese slot sin terminar de calcularlo.
-
-    Devuelve
-    --------
-    dict con:
-        slot_optimo           – (dia, hora) o None
-        dia_nombre            – nombre del día o None
-        coste_total           – float
-        peor_penalizacion     – float
-        detalle_por_profesor  – list[dict]
-        sin_solucion          – bool
-        candidatos_evaluados  – int
+    Poda Branch & Bound: abandona un slot en cuanto el parcial supera al mejor.
     """
-    # Si no hay índices construidos aún (primera vez sin PDF), devolver vacío
     if not indices or not equipo_educativo:
         return _sin_solucion("No hay datos o el equipo educativo está vacío.")
 
-    equipo = list(equipo_educativo)
-    slots  = indices.get("slots_calendario", [])
+    equipo  = list(equipo_educativo)
+    slots   = indices.get("slots_calendario", [])
 
-    # ── Generar candidatos libres ────────────────────────────────────────────
-    ocupado = indices.get("ocupado", {})
-    candidatos = [
-        slot for slot in slots
-        if all(slot not in ocupado.get(pid, set()) for pid in equipo)
-    ]
+    if not slots:
+        return _sin_solucion("No hay franjas candidatas con la configuración actual.")
+
+    # ── Candidatos libres (ningún profesor bloqueado) ────────────────────────
+    candidatos = []
+    for dia, ini, fin in slots:
+        ini_m = t2m(ini)
+        fin_m = t2m(fin)
+        libre = True
+        for pid in equipo:
+            ses = indices["ocupado_por_dia"].get(pid, {}).get(dia, [])
+            if _overlaps(ini_m, fin_m, ses):
+                libre = False
+                break
+        if libre:
+            candidatos.append((dia, ini, fin))
 
     if not candidatos:
         return _sin_solucion(
-            "No existe ningún slot libre común para todos los profesores del equipo.",
-            bloqueados=_analizar_bloqueos(slots, equipo, ocupado),
+            "No existe ninguna franja libre común para todos los profesores del equipo."
         )
 
-    # ── Ordenar heurísticamente (sesiones centrales primero) ────────────────
-    # Esto permite encontrar pronto una buena solución y podar más agresivamente
-    sesiones_validas = indices.get("sesiones_validas", [1,2,3,4,5,6])
-    centro = (min(sesiones_validas) + max(sesiones_validas)) / 2
-    candidatos.sort(key=lambda s: (abs(s[1] - centro), s[0], s[1]))
+    # ── Ordenar heurísticamente: primero franjas centrales de mañana ─────────
+    # Objetivo: encontrar pronto una buena solución → más poda
+    CENTRO_M = t2m("11:00")   # centro aproximado de la mañana
+    candidatos.sort(key=lambda s: (abs(t2m(s[1]) - CENTRO_M), s[0], t2m(s[1])))
 
     # ── Backtracking con Branch & Bound ─────────────────────────────────────
-    mejor_coste     = float("inf")
-    mejor_peor      = float("inf")
-    mejor_slot      = None
-    mejor_detalle   = []
+    mejor_coste   = float("inf")
+    mejor_peor    = float("inf")
+    mejor_slot    = None
+    mejor_detalle = []
 
-    for dia, hora in candidatos:
-        suma_parcial = 0.0
-        max_parcial  = 0.0
+    for dia, ini, fin in candidatos:
+        suma = 0.0
+        maxi = 0.0
         detalle_slot = []
-        poda         = False
+        poda = False
 
         for pid in equipo:
-            pen = penalizacion(pid, dia, hora, indices)
-            suma_parcial += pen
-            max_parcial   = max(max_parcial, pen)
+            pen = penalizacion(pid, dia, ini, fin, indices)
+
+            if pen == float("inf"):       # bloqueado (no debería ocurrir aquí)
+                poda = True; break
+
+            suma += pen
+            maxi  = max(maxi, pen)
 
             # ── PODA ────────────────────────────────────────────────────────
-            # Si ya superamos el mejor coste total → no puede mejorar
-            if suma_parcial > mejor_coste:
-                poda = True
-                break
-            # Si empatamos en coste pero la peor pen ya es >= → tampoco mejora
-            if suma_parcial == mejor_coste and max_parcial >= mejor_peor:
-                poda = True
-                break
+            if suma > mejor_coste:
+                poda = True; break
+            if suma == mejor_coste and maxi >= mejor_peor:
+                poda = True; break
 
-            # Acumular detalle para la salida
-            horas_dia = indices["ocupado_por_dia"].get(pid, {}).get(dia, [])
-            cercana   = _hora_mas_cercana(hora, horas_dia)
+            # Calcular sesión cercana para el detalle
+            ses_dia = indices["ocupado_por_dia"].get(pid, {}).get(dia, [])
+            cercana = _intervalo_mas_cercano(t2m(ini), t2m(fin), ses_dia)
             detalle_slot.append({
-                "profesor_id":             pid,
-                "penalizacion":            pen,
-                "sesion_ocupada_cercana":  cercana,
-                "tiene_sesiones_ese_dia":  bool(horas_dia),
+                "profesor_id":            pid,
+                "penalizacion_min":       round(pen),
+                "intervalo_cercano":      cercana,       # (ini_str, fin_str) o None
+                "tiene_sesiones_ese_dia": bool(ses_dia),
             })
 
         if poda:
             continue
 
         # ── Criterio lexicográfico ───────────────────────────────────────────
-        orden_temporal = dia * 10 + hora   # número creciente día/hora
-        mejor_orden    = (mejor_slot[0] * 10 + mejor_slot[1]) if mejor_slot else float("inf")
+        orden = (dia, t2m(ini))
+        mejor_orden = (mejor_slot[0], t2m(mejor_slot[1])) if mejor_slot else (99, 9999)
 
-        if (suma_parcial, max_parcial, orden_temporal) < (mejor_coste, mejor_peor, mejor_orden):
-            mejor_coste   = suma_parcial
-            mejor_peor    = max_parcial
-            mejor_slot    = (dia, hora)
+        if (suma, maxi, orden) < (mejor_coste, mejor_peor, mejor_orden):
+            mejor_coste   = suma
+            mejor_peor    = maxi
+            mejor_slot    = (dia, ini, fin)
             mejor_detalle = detalle_slot
 
     if mejor_slot is None:
-        return _sin_solucion("Todos los candidatos fueron podados (sin solución viable).")
+        return _sin_solucion("Todos los candidatos fueron descartados por poda.")
 
+    dia, ini, fin = mejor_slot
     return {
         "sin_solucion":          False,
         "slot_optimo":           mejor_slot,
-        "dia_nombre":            DIAS_NOMBRE[mejor_slot[0]],
-        "hora_sesion":           mejor_slot[1],
-        "coste_total":           round(mejor_coste, 2),
-        "peor_penalizacion":     round(mejor_peor, 2),
+        "dia":                   dia,
+        "dia_nombre":            DIAS_NOMBRE[dia],
+        "hora_inicio":           ini,
+        "hora_fin":              fin,
+        "hora_display":          f"{ini} – {fin}",
+        "coste_total":           round(mejor_coste),
+        "peor_penalizacion":     round(mejor_peor),
         "detalle_por_profesor":  mejor_detalle,
         "num_candidatos":        len(candidatos),
         "grupo_objetivo":        grupo_objetivo,
         "equipo_size":           len(equipo),
-        "mensaje":               (
-            f"✅ Slot óptimo encontrado: {DIAS_NOMBRE[mejor_slot[0]]}, "
-            f"sesión {mejor_slot[1]}. "
-            f"Coste total: {round(mejor_coste, 2)} | "
-            f"Peor penalización: {round(mejor_peor, 2)}"
+        "mensaje": (
+            f"✅ Slot óptimo: {DIAS_NOMBRE[dia]} {ini}–{fin}. "
+            f"Coste total: {round(mejor_coste)} min | "
+            f"Peor penalización: {round(mejor_peor)} min"
         ),
     }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  HELPERS INTERNOS
+#  HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _hora_mas_cercana(hora: int, horas_ocupadas: list) -> Optional[int]:
-    """Devuelve la hora ocupada más cercana a 'hora' usando búsqueda binaria."""
-    if not horas_ocupadas:
+def m2t(m: int) -> str:
+    """Minutos desde medianoche → 'HH:MM'."""
+    return f"{m // 60:02d}:{m % 60:02d}"
+
+
+def _intervalo_mas_cercano(slot_ini_m: int, slot_fin_m: int,
+                           sesiones_dia: list) -> Optional[tuple]:
+    """Devuelve el intervalo (ini_str, fin_str) más cercano al slot."""
+    if not sesiones_dia:
         return None
-    pos = bisect_left(horas_ocupadas, hora)
-    candidatos = []
-    if pos < len(horas_ocupadas):
-        candidatos.append(horas_ocupadas[pos])
-    if pos > 0:
-        candidatos.append(horas_ocupadas[pos - 1])
-    return min(candidatos, key=lambda h: abs(h - hora))
+    mejor_d = float("inf")
+    mejor   = None
+    for s_ini, s_fin in sesiones_dia:
+        d = min(abs(slot_ini_m - s_fin), abs(s_ini - slot_fin_m))
+        if d < mejor_d:
+            mejor_d = d
+            mejor   = (m2t(s_ini), m2t(s_fin))
+    return mejor
 
 
-def _sin_solucion(mensaje: str, bloqueados: Optional[dict] = None) -> dict:
+def _sin_solucion(mensaje: str) -> dict:
     return {
-        "sin_solucion":         True,
-        "slot_optimo":          None,
-        "dia_nombre":           None,
-        "hora_sesion":          None,
-        "coste_total":          None,
-        "peor_penalizacion":    None,
-        "detalle_por_profesor": [],
-        "num_candidatos":       0,
-        "grupo_objetivo":       None,
-        "equipo_size":          0,
-        "mensaje":              mensaje,
-        "bloqueos_por_slot":    bloqueados or {},
-    }
-
-
-def _analizar_bloqueos(slots: list, equipo: list, ocupado: dict) -> dict:
-    """Para diagnóstico: cuántos profesores bloquean cada slot."""
-    return {
-        f"{DIAS_NOMBRE[d]}-S{h}": sum(
-            1 for pid in equipo if (d, h) in ocupado.get(pid, set())
-        )
-        for d, h in slots
+        "sin_solucion":          True,
+        "slot_optimo":           None,
+        "dia":                   None,
+        "dia_nombre":            None,
+        "hora_inicio":           None,
+        "hora_fin":              None,
+        "hora_display":          None,
+        "coste_total":           None,
+        "peor_penalizacion":     None,
+        "detalle_por_profesor":  [],
+        "num_candidatos":        0,
+        "grupo_objetivo":        None,
+        "equipo_size":           0,
+        "mensaje":               mensaje,
     }

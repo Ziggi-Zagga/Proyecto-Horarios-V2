@@ -267,21 +267,23 @@ def detalle_profesor(profesor_id):
 def get_horario_global():
     """
     Devuelve lista plana de sesiones para build_indices().
-    Sesiones dobles/triples generan una entrada por cada hora lectiva.
-    Campos: profesor_id, dia (0-4), hora (int), grupo, aula, tarea
+    Cada sesión incluye hora_inicio y hora_fin reales (del PDF).
+    Las sesiones dobles/triples se incluyen como un único intervalo
+    (el algoritmo detecta solapamiento por tiempo, no por número).
+    Campos: profesor_id, dia (0-4), hora_inicio, hora_fin, grupo, aula, tarea
     """
     horario = []
     for profesor_id, sesiones in datos_profesores.items():
         for s in sesiones:
             if s['sesion_num'] is None:
                 continue
-            for offset in range(s['num_sesiones']):
-                horario.append({
-                    'profesor_id': profesor_id,
-                    'dia':         s['dia'],
-                    'hora':        s['sesion_num'] + offset,
-                    'grupo':       s['grupo_principal'],
-                    'aula':        s['aula'],
-                    'tarea':       s['tarea'],
-                })
+            horario.append({
+                'profesor_id': profesor_id,
+                'dia':         s['dia'],
+                'hora_inicio': s['hora_inicio'],
+                'hora_fin':    s['hora_fin'],
+                'grupo':       s['grupo_principal'],
+                'aula':        s['aula'],
+                'tarea':       s['tarea'],
+            })
     return horario

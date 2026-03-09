@@ -1,6 +1,166 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<style>
+  .resultado-wrapper {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+
+  /* ── Cabecera del resultado ── */
+  .resultado-hero {
+    text-align: center;
+    padding: 40px 20px 30px;
+  }
+  .resultado-hero .icon-big {
+    font-size: 3rem;
+    width: 80px; height: 80px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 20px;
+    margin: 0 auto 20px auto;
+  }
+  .icon-big.ok  { background: rgba(16,185,129,0.12); }
+  .icon-big.err { background: rgba(239,68,68,0.12); }
+
+  /* ── Slot destacado ── */
+  .slot-card {
+    background: linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(14,165,233,0.08) 100%);
+    border: 1px solid rgba(16,185,129,0.25);
+    border-radius: 16px;
+    padding: 28px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .slot-info { flex: 1; }
+  .slot-dia  {
+    font-size: 2rem; font-weight: 700;
+    background: var(--gradient-primary);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    line-height: 1.1;
+  }
+  .slot-sesion {
+    font-size: 1rem; color: var(--text-muted); margin-top: 4px;
+  }
+  .slot-metricas {
+    display: flex; gap: 24px; flex-wrap: wrap;
+  }
+  .metrica {
+    text-align: center;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 12px;
+    padding: 14px 22px;
+    min-width: 110px;
+  }
+  .metrica-valor {
+    font-size: 1.6rem; font-weight: 700; color: var(--text-main);
+    line-height: 1;
+  }
+  .metrica-valor.rojo { color: #f87171; }
+  .metrica-label {
+    font-size: 0.75rem; color: var(--text-muted);
+    margin-top: 5px; text-transform: uppercase; letter-spacing: 0.08em;
+  }
+
+  /* ── Info resumen ── */
+  .resumen-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .resumen-item {
+    background: var(--surface-color);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .resumen-item .ri-icon { font-size: 1.4rem; }
+  .ri-label { font-size: 0.78rem; color: var(--text-muted); }
+  .ri-valor { font-size: 0.98rem; font-weight: 600; color: var(--text-main); }
+
+  /* ── Tabla de detalle por profesor ── */
+  .detalle-card {
+    background: var(--surface-color);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .detalle-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; gap: 10px;
+    font-size: 1rem; font-weight: 600;
+  }
+  .detalle-table { width: 100%; border-collapse: collapse; }
+  .detalle-table th {
+    text-align: left;
+    padding: 12px 20px;
+    font-size: 0.73rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .detalle-table td {
+    padding: 14px 20px;
+    font-size: 0.9rem;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    color: var(--text-main);
+  }
+  .detalle-table tr:last-child td { border-bottom: none; }
+  .detalle-table tr:hover td { background: rgba(255,255,255,0.025); }
+
+  /* Barra de penalización */
+  .pen-bar-wrap {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .pen-bar-bg {
+    flex: 1; height: 6px;
+    background: rgba(255,255,255,0.07);
+    border-radius: 3px; overflow: hidden;
+  }
+  .pen-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: var(--gradient-primary);
+    transition: width 0.5s ease;
+  }
+  .pen-bar-fill.alta { background: linear-gradient(90deg,#f59e0b,#ef4444); }
+  .pen-val { font-weight: 700; min-width: 20px; text-align: right; }
+
+  /* Badges */
+  .badge-ok  { background:rgba(16,185,129,0.15); color:#34d399; padding:3px 10px; border-radius:99px; font-size:0.78rem; font-weight:600; }
+  .badge-no  { background:rgba(239,68,68,0.12);  color:#f87171; padding:3px 10px; border-radius:99px; font-size:0.78rem; font-weight:600; }
+
+  /* ── Sin solución ── */
+  .sin-sol-card {
+    background: rgba(239,68,68,0.06);
+    border: 1px solid rgba(239,68,68,0.2);
+    border-radius: 16px;
+    padding: 36px;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+  .sin-sol-card h3 { font-size: 1.3rem; color: #f87171; margin-bottom: 12px; }
+  .sin-sol-card p  { color: var(--text-muted); font-size: 0.95rem; }
+
+  /* ── Botones footer ── */
+  .resultado-footer {
+    display: flex; gap: 14px; justify-content: center;
+    flex-wrap: wrap; padding-bottom: 40px;
+  }
+</style>
+
 <div class="resultado-wrapper">
 
   {% if datos.sin_solucion %}
@@ -8,9 +168,9 @@
      SIN SOLUCIÓN
   ══════════════════════════════════════════════════════════════════ #}
   <div class="resultado-hero">
-    <div class="icon-big err">❌</div>
+    <div class="icon-big err" style="margin:0 auto 20px auto;">❌</div>
     <h2>Sin <span class="highlight">solución</span></h2>
-    <p class="hero-subtitle">{{ datos.mensaje }}</p>
+    <p style="color:var(--text-muted); margin-top:10px;">{{ datos.mensaje }}</p>
   </div>
 
   <div class="sin-sol-card">
@@ -27,18 +187,19 @@
      SOLUCIÓN ENCONTRADA
   ══════════════════════════════════════════════════════════════════ #}
   <div class="resultado-hero">
-    <div class="icon-big ok">🏆</div>
+    <div class="icon-big ok" style="margin:0 auto 20px auto;">🏆</div>
     <h2>Hueco <span class="highlight">óptimo encontrado</span></h2>
-    <p class="hero-subtitle">
+    <p style="color:var(--text-muted); margin-top:8px;">
       Evaluación para el grupo
-      <strong>{{ datos.grupo_objetivo or '—' }}</strong>
+      <strong style="color:var(--text-main);">{{ datos.grupo_objetivo or '—' }}</strong>
     </p>
   </div>
 
+  <!-- Slot principal -->
   <div class="slot-card">
     <div class="slot-info">
       <div class="slot-dia">{{ datos.dia_nombre }}</div>
-      <div class="slot-sesion">Sesión nº {{ datos.hora_sesion }}</div>
+      <div class="slot-sesion">{{ datos.hora_display }}</div>
     </div>
     <div class="slot-metricas">
       <div class="metrica">
@@ -52,6 +213,7 @@
     </div>
   </div>
 
+  <!-- Resumen rápido -->
   <div class="resumen-grid">
     <div class="resumen-item">
       <span class="ri-icon">👥</span>
@@ -75,14 +237,15 @@
       </div>
     </div>
     <div class="resumen-item">
-      <span class="ri-icon">🎯</span>
+      <span class="ri-icon">🕐</span>
       <div>
-        <div class="ri-label">Sesión lectiva</div>
-        <div class="ri-valor">{{ datos.hora_sesion }}ª hora</div>
+        <div class="ri-label">Franja horaria</div>
+        <div class="ri-valor">{{ datos.hora_inicio }} – {{ datos.hora_fin }}</div>
       </div>
     </div>
   </div>
 
+  <!-- Detalle por profesor -->
   {% if datos.detalle_por_profesor %}
   <div class="detalle-card">
     <div class="detalle-header">
@@ -104,16 +267,16 @@
           <td>
             <div class="pen-bar-wrap">
               <div class="pen-bar-bg">
-                <div class="pen-bar-fill {% if d.penalizacion >= 5 %}alta{% endif %}"
-                     style="width: {{ (d.penalizacion / 7 * 100)|round }}%">
+                <div class="pen-bar-fill {% if d.penalizacion_min >= 110 %}alta{% endif %}"
+                     style="width: {{ [((d.penalizacion_min / 385) * 100)|round, 100]|min }}%">
                 </div>
               </div>
-              <span class="pen-val">{{ d.penalizacion }}</span>
+              <span class="pen-val">{{ d.penalizacion_min }}m</span>
             </div>
           </td>
           <td>
-            {% if d.sesion_ocupada_cercana %}
-              Sesión {{ d.sesion_ocupada_cercana }}
+            {% if d.intervalo_cercano %}
+              {{ d.intervalo_cercano[0] }} – {{ d.intervalo_cercano[1] }}
             {% else %}
               <span style="color:var(--text-muted);">—</span>
             {% endif %}
@@ -134,6 +297,7 @@
 
   {% endif %}
 
+  <!-- Footer de acciones -->
   <div class="resultado-footer">
     <a href="{{ url_for('generar_horario') }}" class="btn btn-primary">
       🔄 Nueva búsqueda
