@@ -108,16 +108,23 @@ def build_indices(horario: list[dict], config: dict) -> dict:
     ]
 
     # ── Índices de ocupación (en minutos) ────────────────────────────────────
-    # ocupado_por_dia: {pid: {dia: [(ini_m, fin_m), ...]}}  ordenado por ini_m
-    ocupado_por_dia: dict[str, dict[int, list]] = {}
+    # Separamos dos índices con propósitos distintos:
+    #
+    # bloqueante_por_dia : sesiones que IMPIDEN usar ese slot como candidato.
+    #   Solo incluye sesiones lectivas reales (excluye NL marcadas como libres).
+    #
+    # distancia_por_dia  : todas las sesiones, incluidas NL libres.
+    #   Se usa para calcular la penalización (distancia al evento más cercano).
+    #   El profesor sigue estando físicamente en el centro durante una guardia,
+    #   por lo que un slot adyacente a ella no debería penalizarse como si
+    #   estuviera "lejos" de su jornada.
+
+    bloqueante_por_dia: dict[str, dict[int, list]] = {}
+    distancia_por_dia:  dict[str, dict[int, list]] = {}
 
     for sesion in horario:
         pid   = sesion["profesor_id"]
         tarea = sesion.get("tarea", "").upper()
-
-        # Hora no lectiva marcada como libre → no bloquea
-        if any(nl in tarea for nl in nl_libres):
-            continue
 
         ini_str = sesion.get("hora_inicio", "")
         fin_str = sesion.get("hora_fin", "")
@@ -134,22 +141,35 @@ def build_indices(horario: list[dict], config: dict) -> dict:
 
         ini_m = t2m(ini_str)
         fin_m = t2m(fin_str)
+        par   = (ini_m, fin_m)
 
-        ocupado_por_dia.setdefault(pid, {}).setdefault(dia, [])
-        par = (ini_m, fin_m)
-        if par not in ocupado_por_dia[pid][dia]:
-            ocupado_por_dia[pid][dia].append(par)
+        es_libre = any(nl in tarea for nl in nl_libres)
 
-    # Ordenar por hora de inicio
-    for pid in ocupado_por_dia:
-        for dia in ocupado_por_dia[pid]:
-            ocupado_por_dia[pid][dia].sort()
+        # Distancia: siempre se añade (el prof está ahí de todas formas)
+        distancia_por_dia.setdefault(pid, {}).setdefault(dia, [])
+        if par not in distancia_por_dia[pid][dia]:
+            distancia_por_dia[pid][dia].append(par)
+
+        # Bloqueo: solo si NO es hora no lectiva libre
+        if not es_libre:
+            bloqueante_por_dia.setdefault(pid, {}).setdefault(dia, [])
+            if par not in bloqueante_por_dia[pid][dia]:
+                bloqueante_por_dia[pid][dia].append(par)
+
+    # Ordenar por hora de inicio en ambos índices
+    for idx_dict in (bloqueante_por_dia, distancia_por_dia):
+        for pid in idx_dict:
+            for dia in idx_dict[pid]:
+                idx_dict[pid][dia].sort()
 
     return {
-        "config":            config,
+        "config":             config,
         "franjas_candidatas": franjas_candidatas,
-        "slots_calendario":  slots_calendario,
-        "ocupado_por_dia":   ocupado_por_dia,
+        "slots_calendario":   slots_calendario,
+        "bloqueante_por_dia": bloqueante_por_dia,
+        "distancia_por_dia":  distancia_por_dia,
+        # alias de compatibilidad (usado en penalizacion y overlaps)
+        "ocupado_por_dia":    bloqueante_por_dia,
     }
 
 
@@ -187,22 +207,28 @@ def penalizacion(pid: str, dia: int, slot_ini: str, slot_fin: str,
     - Si el slot solapa con una sesión ocupada → inf (no viable)
     - Si está libre → distancia en minutos al intervalo ocupado más cercano
     """
-    sesiones_dia = indices["ocupado_por_dia"].get(pid, {}).get(dia, [])
+    # Para bloqueo: usamos bloqueante_por_dia (sin NL libres)
+    bloq_dia  = indices.get("bloqueante_por_dia", indices.get("ocupado_por_dia", {}))
+    ses_bloq  = bloq_dia.get(pid, {}).get(dia, [])
 
-    if not sesiones_dia:
-        return PEN_SIN_SESIONES
+    # Para distancia: usamos distancia_por_dia (incluye NL libres)
+    dist_dia  = indices.get("distancia_por_dia",  bloq_dia)
+    ses_dist  = dist_dia.get(pid, {}).get(dia, [])
 
     slot_ini_m = t2m(slot_ini)
     slot_fin_m = t2m(slot_fin)
 
-    # Solapamiento → slot no viable para este profesor
-    if _overlaps(slot_ini_m, slot_fin_m, sesiones_dia):
+    # Solapamiento con sesión bloqueante → slot no viable
+    if _overlaps(slot_ini_m, slot_fin_m, ses_bloq):
         return float("inf")
 
-    # Distancia al intervalo más cercano
+    # Sin ninguna sesión registrada ese día → penalización máxima
+    if not ses_dist:
+        return PEN_SIN_SESIONES
+
+    # Distancia al intervalo más cercano (usando todas las sesiones como referencia)
     mejor = float("inf")
-    for s_ini, s_fin in sesiones_dia:
-        # distancia = 0 si son adyacentes, positiva si hay hueco
+    for s_ini, s_fin in ses_dist:
         d = min(abs(slot_ini_m - s_fin), abs(s_ini - slot_fin_m))
         mejor = min(mejor, d)
 
@@ -238,14 +264,17 @@ def find_best_meeting_slot(
     if not slots:
         return _sin_solucion("No hay franjas candidatas con la configuración actual.")
 
-    # ── Candidatos libres (ningún profesor bloqueado) ────────────────────────
+    # ── Candidatos libres: ningún profesor bloqueado en ese slot ─────────────
+    # Usamos bloqueante_por_dia (excluye NL libres) para que una guardia
+    # no impida proponer ese slot como candidato.
+    bloq = indices.get("bloqueante_por_dia", indices.get("ocupado_por_dia", {}))
     candidatos = []
     for dia, ini, fin in slots:
         ini_m = t2m(ini)
         fin_m = t2m(fin)
         libre = True
         for pid in equipo:
-            ses = indices["ocupado_por_dia"].get(pid, {}).get(dia, [])
+            ses = bloq.get(pid, {}).get(dia, [])
             if _overlaps(ini_m, fin_m, ses):
                 libre = False
                 break
